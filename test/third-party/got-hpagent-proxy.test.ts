@@ -14,7 +14,7 @@ afterAll(() => {
 })
 
 it('', async () => {
-  interceptor.once('request', ({ request }) => {
+  interceptor.on('request', ({ request }) => {
     console.log(
       'REQUEST',
       request.method,
@@ -32,6 +32,17 @@ it('', async () => {
         new Response(null, {
           status: 200,
           statusText: 'Connection Established',
+        })
+      )
+    }
+
+    // Handle the actual request over the tunnel
+    const url = new URL(request.url)
+    if (url.hostname === 'fake.ping') {
+      return request.respondWith(
+        new Response('pong', {
+          status: 200,
+          headers: { 'content-type': 'text/plain' }
         })
       )
     }

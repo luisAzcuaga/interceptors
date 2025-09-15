@@ -124,16 +124,42 @@ export function normalizeClientRequestArgs(
   if (typeof args[0] === 'string') {
     logger.info('first argument is a location string:', args[0])
 
-    url = new URL(args[0])
-    logger.info('created a url:', url)
+    // Handle empty strings - common for CONNECT requests where URL is built from options
+    if (args[0] === '') {
+      logger.info('empty URL string, treating as options-only request')
 
-    const requestOptionsFromUrl = getRequestOptionsByUrl(url)
-    logger.info('request options from url:', requestOptionsFromUrl)
+      if (typeof args[1] === 'object' && args[1] !== null) {
+        // Treat as normalizeClientRequestArgs(defaultProtocol, RequestOptions, callback?)
+        options = args[1] as RequestOptions
+        logger.info('first argument is RequestOptions:', options)
 
-    options = resolveRequestOptions(args, url)
-    logger.info('resolved request options:', options)
+        // When handling a "RequestOptions" object without an explicit "protocol",
+        // infer the protocol from the request issuing module (http/https).
+        options.protocol = options.protocol || defaultProtocol
+        logger.info('normalized request options:', options)
 
-    callback = resolveCallback(args)
+        url = getUrlByRequestOptions(options)
+        logger.info('created a URL from RequestOptions:', url.href)
+
+        callback = typeof args[2] === 'function' ? args[2] : undefined
+      } else {
+        // Empty string with no options - fallback to localhost
+        url = new URL('http://localhost')
+        options = resolveRequestOptions([], url)
+        callback = typeof args[1] === 'function' ? args[1] : undefined
+      }
+    } else {
+      url = new URL(args[0])
+      logger.info('created a url:', url)
+
+      const requestOptionsFromUrl = getRequestOptionsByUrl(url)
+      logger.info('request options from url:', requestOptionsFromUrl)
+
+      options = resolveRequestOptions(args, url)
+      logger.info('resolved request options:', options)
+
+      callback = resolveCallback(args)
+    }
   }
   // Handle a given URL instance as-is
   // and derive request options from it.

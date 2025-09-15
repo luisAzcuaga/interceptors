@@ -157,10 +157,14 @@ export function getUrlByRequestOptions(options: ResolvedRequestOptions): URL {
 
   const path = options.path
     ? /**
-       * @FIXME THIS IS INCORRECT!
-       * CONNECT options of ClientRequest can have "path" pointing to the origin host.
+       * For CONNECT requests, the "path" option contains the target host (e.g., "www.example.com:80")
+       * rather than a URL path. In this case, we should use the default path for the URL construction
+       * since the actual target is specified in the path field and will be handled separately.
        * @see https://nodejs.org/docs/latest-v18.x/api/http.html#event-connect (example)
-       *
+       */
+      options.method === 'CONNECT'
+      ? DEFAULT_PATH
+      : /**
        * @note Some clients provide the "path" option that
        * does not start with a leading slash. Prepend it
        * so the normalized URL can be constructed correctly.
