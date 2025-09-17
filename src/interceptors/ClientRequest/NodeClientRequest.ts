@@ -609,7 +609,9 @@ export class NodeClientRequest extends ClientRequest {
      * debatable, but we should still handle this case gracefully.
      * @see https://github.com/mswjs/interceptors/issues/304
      */
-    // @ts-ignore
-    this.agent?.destroy()
+    const agent = (this as any).agent
+    if (agent && typeof agent.destroy === 'function') {
+      agent.destroy()
+    }
   }
 }
