@@ -1,17 +1,17 @@
 import { ChildProcess } from 'child_process'
-import { Headers, HeadersObject, headersToObject } from 'headers-polyfill'
 import { HttpRequestEventMap } from './glossary'
 import { Interceptor } from './Interceptor'
 import { BatchInterceptor } from './BatchInterceptor'
 import { ClientRequestInterceptor } from './interceptors/ClientRequest'
 import { XMLHttpRequestInterceptor } from './interceptors/XMLHttpRequest'
 import { toInteractiveRequest } from './utils/toInteractiveRequest'
+import { emitAsync } from './utils/emitAsync'
 
 export interface SerializedRequest {
   id: string
   url: string
   method: string
-  headers: HeadersObject
+  headers: Array<[string, string]>
   credentials: RequestCredentials
   body: string
 }
@@ -24,7 +24,7 @@ interface RevivedRequest extends Omit<SerializedRequest, 'url' | 'headers'> {
 export interface SerializedResponse {
   status: number
   statusText: string
-  headers: HeadersObject
+  headers: Array<[string, string]>
   body: string
 }
 
@@ -53,7 +53,7 @@ export class RemoteHttpInterceptor extends BatchInterceptor<
         id: requestId,
         method: request.method,
         url: request.url,
-        headers: headersToObject(request.headers),
+        headers: Array.from(request.headers.entries()),
         credentials: request.credentials,
         body: ['GET', 'HEAD'].includes(request.method)
           ? null
@@ -87,11 +87,11 @@ export class RemoteHttpInterceptor extends BatchInterceptor<
             const mockedResponse = new Response(responseInit.body, {
               status: responseInit.status,
               statusText: responseInit.statusText,
-              headers: new Headers(responseInit.headers),
+              headers: responseInit.headers,
             })
 
             request.respondWith(mockedResponse)
-            resolve()
+            return resolve()
           }
         }
       })
@@ -167,20 +167,21 @@ export class RemoteHttpResolver extends Interceptor<HttpRequestEventMap> {
         body: requestJson.body,
       })
 
-      const interactiveRequest = toInteractiveRequest(capturedRequest)
+      const { interactiveRequest, requestController } =
+        toInteractiveRequest(capturedRequest)
 
-      this.emitter.emit('request', {
+      this.emitter.once('request', () => {
+        if (requestController.responsePromise.state === 'pending') {
+          requestController.respondWith(undefined)
+        }
+      })
+
+      await emitAsync(this.emitter, 'request', {
         request: interactiveRequest,
         requestId: requestJson.id,
       })
 
-      await this.emitter.untilIdle(
-        'request',
-        ({ args: [{ requestId: pendingRequestId }] }) => {
-          return pendingRequestId === requestJson.id
-        }
-      )
-      const [mockedResponse] = await interactiveRequest.respondWith.invoked()
+      const mockedResponse = await requestController.responsePromise
 
       if (!mockedResponse) {
         return
@@ -194,7 +195,7 @@ export class RemoteHttpResolver extends Interceptor<HttpRequestEventMap> {
       const serializedResponse = JSON.stringify({
         status: mockedResponse.status,
         statusText: mockedResponse.statusText,
-        headers: headersToObject(mockedResponse.headers),
+        headers: Array.from(mockedResponse.headers.entries()),
         body: responseText,
       } as SerializedResponse)
 

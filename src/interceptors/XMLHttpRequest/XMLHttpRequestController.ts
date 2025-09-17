@@ -1,5 +1,5 @@
 import { invariant } from 'outvariant'
-import { headersToString } from 'headers-polyfill'
+import { isNodeProcess } from 'is-node-process'
 import type { Logger } from '@open-draft/logger'
 import { concatArrayBuffer } from './utils/concatArrayBuffer'
 import { createEvent } from './utils/createEvent'
@@ -13,8 +13,10 @@ import { isDomParserSupportedType } from './utils/isDomParserSupportedType'
 import { parseJson } from '../../utils/parseJson'
 import { uuidv4 } from '../../utils/uuid'
 import { createResponse } from './utils/createResponse'
+import { FORBIDDEN_REQUEST_METHODS } from '../../utils/fetchUtils'
 
 const IS_MOCKED_RESPONSE = Symbol('isMockedResponse')
+const IS_NODE = isNodeProcess()
 
 /**
  * An `XMLHttpRequest` instance controller that allows us
@@ -22,7 +24,7 @@ const IS_MOCKED_RESPONSE = Symbol('isMockedResponse')
  */
 export class XMLHttpRequestController {
   public request: XMLHttpRequest
-  public requestId?: string
+  public requestId: string
   public onRequest?: (
     this: XMLHttpRequestController,
     args: {
@@ -49,6 +51,7 @@ export class XMLHttpRequestController {
 
   constructor(readonly initialRequest: XMLHttpRequest, public logger: Logger) {
     this.events = new Map()
+    this.requestId = uuidv4()
     this.requestHeaders = new Headers()
     this.responseBuffer = new Uint8Array()
 
@@ -80,8 +83,6 @@ export class XMLHttpRequestController {
           case 'open': {
             const [method, url] = args as [string, string | undefined]
 
-            this.requestId = uuidv4()
-
             if (typeof url === 'undefined') {
               this.method = 'GET'
               this.url = toAbsoluteUrl(method)
@@ -103,7 +104,7 @@ export class XMLHttpRequestController {
             ]
 
             this.registerEvent(eventName, listener)
-            this.logger.info('addEventListener', eventName, listener.name)
+            this.logger.info('addEventListener', eventName, listener)
 
             return invoke()
           }
@@ -171,7 +172,7 @@ export class XMLHttpRequestController {
                 )
 
                 /**
-                 * @note Set the intercepted request ID on the original request
+                 * @note Set the intercepted request ID on the original request in Node.js
                  * so that if it triggers any other interceptors, they don't attempt
                  * to process it once again.
                  *
@@ -179,7 +180,9 @@ export class XMLHttpRequestController {
                  * and we don't want for both XHR and ClientRequest interceptors to
                  * handle the same request at the same time (e.g. emit the "response" event twice).
                  */
-                this.request.setRequestHeader('X-Request-Id', this.requestId!)
+                if (IS_NODE) {
+                  this.request.setRequestHeader('X-Request-Id', this.requestId!)
+                }
 
                 return invoke()
               }
@@ -204,7 +207,7 @@ export class XMLHttpRequestController {
     const nextEvents = prevEvents.concat(listener)
     this.events.set(eventName, nextEvents)
 
-    this.logger.info('registered event "%s"', eventName, listener.name)
+    this.logger.info('registered event "%s"', eventName, listener)
   }
 
   /**
@@ -264,7 +267,13 @@ export class XMLHttpRequestController {
             return ''
           }
 
-          const allHeaders = headersToString(response.headers)
+          const headersList = Array.from(response.headers.entries())
+          const allHeaders = headersList
+            .map(([headerName, headerValue]) => {
+              return `${headerName}: ${headerValue}`
+            })
+            .join('\r\n')
+
           this.logger.info('resolved all response headers to', allHeaders)
 
           return allHeaders
@@ -543,7 +552,9 @@ export class XMLHttpRequestController {
     this.logger.info('converting request to a Fetch API Request...')
 
     const fetchRequest = new Request(this.url.href, {
-      method: this.method,
+      method: FORBIDDEN_REQUEST_METHODS.includes(this.method)
+        ? `UNSAFE-${this.method}`
+        : this.method,
       headers: this.requestHeaders,
       /**
        * @see https://xhr.spec.whatwg.org/#cross-origin-credentials
@@ -553,6 +564,12 @@ export class XMLHttpRequestController {
         ? null
         : (this.requestBody as any),
     })
+
+    if (fetchRequest.method.startsWith('UNSAFE-')) {
+      Object.defineProperty(fetchRequest, 'method', {
+        value: fetchRequest.method.replace('UNSAFE-', ''),
+      })
+    }
 
     const proxyHeaders = createProxy(fetchRequest.headers, {
       methodCall: ([methodName, args], invoke) => {
@@ -588,6 +605,17 @@ export class XMLHttpRequestController {
 }
 
 function toAbsoluteUrl(url: string | URL): URL {
+  /**
+   * @note XMLHttpRequest interceptor may run in environments
+   * that implement XMLHttpRequest but don't implement "location"
+   * (for example, React Native). If that's the case, return the
+   * input URL as-is (nothing to be relative to).
+   * @see https://github.com/mswjs/msw/issues/1777
+   */
+  if (typeof location === 'undefined') {
+    return new URL(url)
+  }
+
   return new URL(url.toString(), location.href)
 }
 

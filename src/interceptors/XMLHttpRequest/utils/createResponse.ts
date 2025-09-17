@@ -1,12 +1,50 @@
-import { stringToHeaders } from 'headers-polyfill'
+import { RESPONSE_STATUS_CODES_WITHOUT_BODY } from '../../../utils/fetchUtils'
 
+/**
+ * Creates a Fetch API `Response` instance from the given
+ * `XMLHttpRequest` instance and a response body.
+ */
 export function createResponse(
   request: XMLHttpRequest,
-  responseBody: BodyInit | null
+  body: BodyInit | null
 ): Response {
-  return new Response(responseBody, {
+  /**
+   * Handle XMLHttpRequest responses that must have null as the
+   * response body when represented using Fetch API Response.
+   * XMLHttpRequest response will always have an empty string
+   * as the "request.response" in those cases, resulting in an error
+   * when constructing a Response instance.
+   * @see https://github.com/mswjs/interceptors/issues/379
+   */
+  const responseBodyOrNull = RESPONSE_STATUS_CODES_WITHOUT_BODY.includes(
+    request.status
+  )
+    ? null
+    : body
+
+  return new Response(responseBodyOrNull, {
     status: request.status,
     statusText: request.statusText,
-    headers: stringToHeaders(request.getAllResponseHeaders()),
+    headers: createHeadersFromXMLHttpReqestHeaders(
+      request.getAllResponseHeaders()
+    ),
   })
+}
+
+function createHeadersFromXMLHttpReqestHeaders(headersString: string): Headers {
+  const headers = new Headers()
+
+  const lines = headersString.split(/[\r\n]+/)
+  for (const line of lines) {
+    if (line.trim() === '') {
+      continue
+    }
+
+    const [name, ...parts] = line.split(': ')
+    const value = parts.join(': ')
+
+    headers.append(name, value)
+  }
+
+  return headers
 }

@@ -86,7 +86,14 @@ function getHostByRequestOptions(options: ResolvedRequestOptions): string {
   return host || DEFAULT_HOST
 }
 
-function getAuthByRequestOptions(options: ResolvedRequestOptions) {
+interface RequestAuth {
+  username: string
+  password: string
+}
+
+function getAuthByRequestOptions(
+  options: ResolvedRequestOptions
+): RequestAuth | undefined {
   if (options.auth) {
     const [username, password] = options.auth.split(':')
     return { username, password }
@@ -148,7 +155,25 @@ export function getUrlByRequestOptions(options: ResolvedRequestOptions): URL {
   const hostname = getHostname(host, port)
   logger.info('hostname', hostname)
 
-  const path = options.path || DEFAULT_PATH
+  const path = options.path
+    ? /**
+       * For CONNECT requests, the "path" option contains the target host (e.g., "www.example.com:80")
+       * rather than a URL path. In this case, we should use the default path for the URL construction
+       * since the actual target is specified in the path field and will be handled separately.
+       * @see https://nodejs.org/docs/latest-v18.x/api/http.html#event-connect (example)
+       */
+      options.method === 'CONNECT'
+      ? DEFAULT_PATH
+      : /**
+       * @note Some clients provide the "path" option that
+       * does not start with a leading slash. Prepend it
+       * so the normalized URL can be constructed correctly.
+       * @see https://github.com/delvedor/hpagent/blob/96f45f1d40bfbdfd0fcc84cdba056be6e0fb8f4c/index.js#L23
+       */
+      options.path.startsWith('/')
+      ? options.path
+      : `/${options.path}`
+    : DEFAULT_PATH
   logger.info('path', path)
 
   const credentials = getAuthByRequestOptions(options)
@@ -159,7 +184,10 @@ export function getUrlByRequestOptions(options: ResolvedRequestOptions): URL {
     : ''
   logger.info('auth string:', authString)
 
-  const url = new URL(`${protocol}//${authString}${hostname}${path}`)
+  const url = new URL(`${protocol}//${hostname}${path}`)
+  url.username = credentials?.username || ''
+  url.password = credentials?.password || ''
+
   logger.info('created url:', url)
 
   return url
