@@ -175,15 +175,6 @@ export class NodeClientRequest extends ClientRequest {
 
     const capturedRequest = createRequest(this)
 
-    // Enhanced logging for CONNECT requests
-    if (this.method === 'CONNECT') {
-      this.logger.info('=== CONNECT REQUEST INITIATED ===')
-      this.logger.info('CONNECT request URL:', capturedRequest.url)
-      this.logger.info('CONNECT request headers:', Object.fromEntries(capturedRequest.headers.entries()))
-      this.logger.info('CONNECT path:', this.path)
-      this.logger.info('CONNECT host:', this.host)
-    }
-
     const { interactiveRequest, requestController } =
       toInteractiveRequest(capturedRequest)
 
@@ -403,16 +394,6 @@ export class NodeClientRequest extends ClientRequest {
       const error = data[0] as NodeJS.ErrnoException
       const errorCode = error.code || ''
 
-      // Enhanced logging for CONNECT request errors
-      if (this.method === 'CONNECT') {
-        this.logger.error('=== CONNECT REQUEST ERROR ===')
-        this.logger.error('CONNECT error code:', errorCode)
-        this.logger.error('CONNECT error message:', error.message)
-        this.logger.error('CONNECT full error:', error)
-        this.logger.error('CONNECT request state:', this.state)
-        this.logger.error('CONNECT response status:', this.response?.statusCode)
-      }
-
       this.logger.info('error:\n', error)
 
       // Suppress only specific Node.js connection errors.
@@ -454,14 +435,6 @@ export class NodeClientRequest extends ClientRequest {
     encoding?: BufferEncoding | null,
     callback?: ClientRequestEndCallback | null
   ): this {
-    // Enhanced logging for CONNECT passthrough
-    if (this.method === 'CONNECT') {
-      this.logger.info('=== CONNECT REQUEST PASSTHROUGH ===')
-      this.logger.info('CONNECT request being passed through to real server')
-      this.logger.info('CONNECT target URL:', this.url?.href)
-      this.logger.info('CONNECT passthrough chunk:', chunk)
-    }
-
     this.state = HttpClientInternalState.ResponseReceived
     this.responseType = 'passthrough'
 
@@ -510,14 +483,6 @@ export class NodeClientRequest extends ClientRequest {
    */
   private respondWith(mockedResponse: Response): void {
     this.logger.info('responding with a mocked response...', mockedResponse)
-
-    // Enhanced logging for CONNECT response
-    if (this.method === 'CONNECT') {
-      this.logger.info('=== CONNECT RESPONSE RECEIVED (MOCKED) ===')
-      this.logger.info('CONNECT response status:', mockedResponse.status)
-      this.logger.info('CONNECT response statusText:', mockedResponse.statusText)
-      this.logger.info('CONNECT response headers:', Object.fromEntries(mockedResponse.headers.entries()))
-    }
 
     this.state = HttpClientInternalState.ResponseReceived
     this.responseType = 'mock'
@@ -616,26 +581,19 @@ export class NodeClientRequest extends ClientRequest {
       this.logger.info('request complete!')
 
       if (this.method === 'CONNECT') {
-        this.logger.info('=== CONNECT TUNNEL ESTABLISHMENT ===')
-        this.logger.info('CONNECT response status code:', this.response?.statusCode)
-        this.logger.info('CONNECT response status message:', this.response?.statusMessage)
-        this.logger.info('CONNECT response headers:', this.response?.headers)
-
         const head = Buffer.from('')
 
         const socket = new Duplex({
           read() {},
           write(chunk, encoding, callback) {
             console.log(
-              'CONNECT tunnel data write:\n',
+              'CONNECT event Duplex write:\n',
               `== START ==\n${chunk.toString('utf8')}== END ==`
             )
             callback()
           },
         })
 
-        this.logger.info('=== EMITTING CONNECT EVENT ===')
-        this.logger.info('CONNECT socket established, emitting connect event')
         this.emit('connect', this.response, socket, head)
       }
     })

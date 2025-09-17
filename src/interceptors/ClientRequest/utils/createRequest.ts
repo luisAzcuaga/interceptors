@@ -5,14 +5,6 @@ import { FORBIDDEN_REQUEST_METHODS } from '../../../utils/fetchUtils'
  * Creates a Fetch API `Request` instance from the given `http.ClientRequest`.
  */
 export function createRequest(clientRequest: NodeClientRequest): Request {
-  // Enhanced logging for CONNECT requests
-  if (clientRequest.method === 'CONNECT') {
-    console.log('=== CREATING CONNECT REQUEST ===')
-    console.log('CONNECT clientRequest.url:', clientRequest.url.href)
-    console.log('CONNECT clientRequest.method:', clientRequest.method)
-    console.log('CONNECT clientRequest.path:', clientRequest.path)
-    console.log('CONNECT clientRequest.host:', clientRequest.host)
-  }
 
   const headers = new Headers()
 
@@ -62,14 +54,6 @@ export function createRequest(clientRequest: NodeClientRequest): Request {
     Object.defineProperty(fetchRequest, 'method', {
       value: fetchRequest.method.replace('UNSAFE-', ''),
     })
-  }
-
-  // Enhanced logging for CONNECT requests
-  if (method === 'CONNECT') {
-    console.log('=== FINAL CONNECT REQUEST ===')
-    console.log('CONNECT final URL:', fetchRequest.url)
-    console.log('CONNECT final method:', fetchRequest.method)
-    console.log('CONNECT final headers:', Object.fromEntries(fetchRequest.headers.entries()))
   }
 
   return fetchRequest
