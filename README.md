@@ -6,7 +6,7 @@ Low-level HTTP/HTTPS/XHR/fetch request interception library.
 
 **Intercepts any requests issued by:**
 
-- `http.get`/`http.request`
+- `http.get`/`http.request` (including CONNECT method for HTTP tunneling)
 - `https.get`/`https.request`
 - `XMLHttpRequest`
 - `window.fetch`
@@ -76,7 +76,7 @@ By extending the native modules, this library actually constructs requests as so
 
 This library extends (or patches, where applicable) the following native modules:
 
-- `http.get`/`http.request`
+- `http.get`/`http.request` (including CONNECT method support)
 - `https.get`/`https.request`
 - `XMLHttpRequest`
 - `fetch`

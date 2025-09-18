@@ -36,9 +36,10 @@ This is `@mswjs/interceptors`, a low-level HTTP/HTTPS/XHR/fetch request intercep
 ### Interceptor Types
 
 The library provides specific interceptors for different request sources:
-- **`ClientRequestInterceptor`** - Intercepts `http.get`/`http.request` calls (Node.js only)
+- **`ClientRequestInterceptor`** - Intercepts `http.get`/`http.request` calls including CONNECT method for proxy tunneling (Node.js only)
 - **`XMLHttpRequestInterceptor`** - Intercepts `XMLHttpRequest` (both Node.js and browser)
 - **`FetchInterceptor`** - Intercepts `fetch` calls (both Node.js and browser)
+- **`SocketInterceptor`** - Enables socket-based interception for tunneling scenarios
 
 ### Build System
 
@@ -51,6 +52,7 @@ The library provides specific interceptors for different request sources:
 1. All intercepted requests are normalized to Fetch API `Request` instances
 2. Responses use Fetch API `Response` instances as the common format
 3. The library handles coercion between different request/response formats (e.g., `http.OutgoingMessage` for `http.ClientRequest`)
+4. CONNECT method requests are supported for HTTP tunneling and proxy scenarios with proper socket handling
 
 ### Event System
 
@@ -69,6 +71,9 @@ All interceptors emit:
 ### Key Directories
 
 - `src/interceptors/` - Individual interceptor implementations
+  - `src/interceptors/Socket/` - Socket-based interception for tunneling scenarios
 - `src/presets/` - Pre-configured interceptor combinations for Node.js and browser
 - `src/utils/` - Utility functions for request/response handling
 - `test/` - Integration tests with separate configurations for different environments
+  - `test/modules/http/compliance/http-connect.test.ts` - Tests for CONNECT method support
+  - `test/third-party/got-hpagent-proxy.test.ts` - Tests for proxy agent compatibility
